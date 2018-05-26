@@ -1,4 +1,0 @@
-#!/bin/sh
-OLD_PO_DIR="${HOME}/gitroot/emacs-26.0.rc1-doc-emacs/"
-NEW_DOC_DIR="${HOME}/work/emacs/"
-UPDATE_NEW_DOCS_CMD="git fetch ${NEW_DOC_DIR}/../.."
