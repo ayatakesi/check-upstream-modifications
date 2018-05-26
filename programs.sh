@@ -9,7 +9,7 @@ COMMIT_COMPENDIUM_CMD="git add -A; git commit -m 'update compendium'; git push -
 PUBLISH_LOC=${HOME}/gitroot/ayatakesi.github.io/emacs/
 
 function before_translate () {
-    PWD=$(pwd)
+    BASE_DIR=$(pwd)
     eval ${UPDATE_NEW_DOCS_CMD}
 
     rm -i ${COMPENDIUM}
@@ -56,7 +56,15 @@ function before_translate () {
 
     cd ${PUBLISH_LOC}
     eval ${COMMIT_COMPENDIUM_CMD}
-    cd ${PWD}
+    cd ${BASE_DIR}
+}
+
+function check_po_state () {
+    for PO in $(ls *.po)
+    do
+	STAT=$(msgfmt -v ${PO} 2>&1)
+	printf "%s := %s\n" ${PO} "${STAT}"
+    done
 }
 
 function after_translate () {
@@ -66,14 +74,25 @@ function after_translate () {
     do
 	F=$(basename ${PO})
 	NEW_PO=${WORK_DIR}/${F}
-	POT=${NEW_PO}t
+
+	TRANS=$(mktemp)
+	msgattrib --translated --force-po -o ${TRANS} ${NEW_PO}
 	
-	msgmerge --previous --compendium ${COMPENDIUM} \
-		 -o ${POT} /dev/null ${PO}
+	FUZZY=$(mktemp)
+	msgattrib --only-fuzzy --clear-fuzzy --force-po ${NEW_PO} \
+	    | msgfilter --keep-header --force-po -o ${FUZZY} sed -e 's/.*//'
+	msgmerge --force-po --compendium ${COMPENDIUM} \
+		 -o ${FUZZY}.translated /dev/null ${FUZZY}
 	
-#	msgattrib --clear-previous --clear-fuzzy \
-#		  -o ${NEW_PO} ${POT}
-	rm ${POT}
+	UNTRANS=$(mktemp)
+	msgattrib --untranslated --force-po -o ${UNTRANS} ${NEW_PO}
+	msgmerge --force-po --compendium ${COMPENDIUM} \
+		 -o ${UNTRANS}.translated /dev/null ${UNTRANS}
+	
+	msgcat --force-po --no-wrap -F -o ${NEW_PO} \
+	       ${TRANS} ${FUZZY}.translated ${UNTRANS}.translated
+	
+	rm ${TRANS} ${FUZZY}* ${UNTRANS}*
 	cp ${NEW_PO} ${PO} && rm ${NEW_PO}
     done
 }
