@@ -9,6 +9,7 @@ COMMIT_COMPENDIUM_CMD="git add -A; git commit -m 'update compendium'; git push -
 PUBLISH_LOC=${HOME}/gitroot/ayatakesi.github.io/emacs/
 
 function before_translate () {
+    PWD=$(pwd)
     eval ${UPDATE_NEW_DOCS_CMD}
 
     rm -i ${COMPENDIUM}
@@ -19,7 +20,7 @@ function before_translate () {
 	POT="${WORK_DIR}/${F}.pot"
 	OLD_PO="${OLD_PO_DIR}/${F}.po"        
 	NEW_PO="${WORK_DIR}/${F}.po"
-	q
+	
 	if [ -f ${OLD_PO} ] ; then
 	    po4a-gettextize -M utf8 -f texinfo \
 			    -m ${TEXI} -p ${POT}
@@ -45,9 +46,8 @@ function before_translate () {
 
     done
 
-    rm -f *.po *.pot
     msgcat --no-wrap *.compendium  > ${COMPENDIUM}
-    rm -f *.compendium
+    rm -f *.pot *.compendium
 
     msgcat --no-wrap --color=html ${COMPENDIUM} \
 	   > ${COMPENDIUM}.html
@@ -56,6 +56,7 @@ function before_translate () {
 
     cd ${PUBLISH_LOC}
     eval ${COMMIT_COMPENDIUM_CMD}
+    cd ${PWD}
 }
 
 function after_translate () {
@@ -70,8 +71,8 @@ function after_translate () {
 	msgmerge --previous --compendium ${COMPENDIUM} \
 		 -o ${POT} /dev/null ${PO}
 	
-	msgattrib --clear-previous --clear-fuzzy \
-		  -o ${NEW_PO} ${POT}
+#	msgattrib --clear-previous --clear-fuzzy \
+#		  -o ${NEW_PO} ${POT}
 	rm ${POT}
 	cp ${NEW_PO} ${PO} && rm ${NEW_PO}
     done
