@@ -17,7 +17,7 @@ do
     POT="${WORK_DIR}/${F}.pot"
     OLD_PO="${OLD_PO_DIR}/${F}.po"        
     NEW_PO="${WORK_DIR}/${F}.po"
-
+q
     if [ -f ${OLD_PO} ] ; then
 	po4a-gettextize -M utf8 -f texinfo \
 			-m ${TEXI} -p ${POT}
