@@ -1,98 +1,95 @@
 #!/bin/sh
-OLD_PO_DIR=${HOME}/gitroot/emacs-26.1-doc-emacs/
-OLD_DOC_DIR=${OLD_PO_DIR}/original_texis/
-NEW_DOC_DIR=${HOME}/work/emacs/doc/emacs/
-WORK_DIR="./"
-COMPENDIUM=${WORK_DIR}/compendium.po
-UPDATE_NEW_DOCS_CMD="git fetch ${NEW_DOC_DIR}/../.."
-COMMIT_COMPENDIUM_CMD="git add -A; git commit -m 'update compendium'; git push -u origin master"
-PUBLISH_LOC=${HOME}/gitroot/ayatakesi.github.io/emacs/
+# 内部SD逼迫のため外部SDにリポジトリ作成
+LOCAL_REPOSITORY_DIR="/data/data/com.termux/files/home/storage/shared/gitroot/emacs"
+DOCUMENT_FILES_SUBDIR="doc/emacs"
+DOCUMENT_FILES="*.texi"
 
-function before_translate () {
-    BASE_DIR=$(pwd)
-    eval ${UPDATE_NEW_DOCS_CMD}
+# カレントバージョン
+CURR_VERSION=${1}
 
-    rm -i ${COMPENDIUM}
+# 突合先ブランチ
+NEW_VERSION_BRANCH=${2}
 
-    for TEXI in $(ls ${NEW_DOC_DIR}/*.texi)
-    do
-	F=$(basename ${TEXI})
-	POT="${WORK_DIR}/${F}.pot"
-	OLD_PO="${OLD_PO_DIR}/${F}.po"        
-	NEW_PO="${WORK_DIR}/${F}.po"
-	
-	if [ -f ${OLD_PO} ] ; then
-	    po4a-gettextize -M utf8 -f texinfo \
-			    -m ${TEXI} -p ${POT}
-	    
-	    msgmerge --previous --compendium ${OLD_PO} \
-		     -o ${NEW_PO} /dev/null ${POT}
+# 当リポジトリと兄弟のローカルリポジトリを参照
+CURR_PO_FILES_DIR="$(pwd)/../emacs-${CURR_VERSION}-doc-emacs"
+PUBLISH_TO_DIR="$(pwd)/../ayatakesi.github.io"
 
-	    mv ${OLD_PO} ${OLD_PO}.bk && \
-		cp ${NEW_PO} ${OLD_PO}
-	    
-	    FUZZY=$(mktemp)
-	    msgattrib -o ${FUZZY} --only-fuzzy ${NEW_PO}
-	    
-	    UNTRANS=$(mktemp)
-	    msgattrib -o ${UNTRANS} --untranslated ${NEW_PO}
+WORK_DIR="$(pwd)/work"
+rm -fr ${WORK_DIR} && mkdir -p ${WORK_DIR}
 
-	    msgcat -o ${NEW_PO}.compendium \
-		   -F ${FUZZY} ${UNTRANS}
-	    
-	    rm -f ${FUZZY} ${UNTRANS}
-	    
-	fi
+# 対象ブランチをフェッチ
+cd ${LOCAL_REPOSITORY_DIR}
+git fetch origin ${NEW_VERSION_BRANCH}
 
-    done
+# ヘッダーを作成
+cat <<EOF > ${WORK_DIR}/header.txt
+This file was updated $(date)
+  by branch ${NEW_VERSION_BRANCH}'s HEAD.
+EOF
 
-    msgcat --no-wrap *.compendium  > ${COMPENDIUM}
-    rm -f *.pot *.compendium
+# 対象ブランチHEADのドキュメントを作業ディレクトリーにコピー
+rm -fr ${WORK_DIR}/${DOCUMENT_FILES_SUBDIR} &&
+    mkdir -p ${WORK_DIR}/${DOCUMENT_FILES_SUBDIR}
 
-    msgcat --no-wrap --color=html ${COMPENDIUM} \
-	   > ${COMPENDIUM}.html
+cp ${LOCAL_REPOSITORY_DIR}/${DOCUMENT_FILES_SUBDIR}/${DOCUMENT_FILES} ${WORK_DIR}/${DOCUMENT_FILES_SUBDIR}
 
-    cp ${COMPENDIUM}.html ${PUBLISH_LOC}
-
-    cd ${PUBLISH_LOC}
-    eval ${COMMIT_COMPENDIUM_CMD}
-    cd ${BASE_DIR}
-}
-
-function check_po_state () {
-    for PO in $(ls *.po)
-    do
-	STAT=$(msgfmt -v ${PO} 2>&1)
-	printf "%s := %s\n" ${PO} "${STAT}"
-    done
-}
-
-function after_translate () {
-    cp ${NEW_DOC_DIR}/*.texi ${OLD_DOC_DIR}
+for TEXI in $(ls ${WORK_DIR}/${DOCUMENT_FILES_SUBDIR}/${DOCUMENT_FILES})
+do
+    FNAME=$(basename ${TEXI})
     
-    for PO in $(ls ${OLD_PO_DIR}/*.po)
-    do
-	F=$(basename ${PO})
-	NEW_PO=${WORK_DIR}/${F}
+    # ドキュメントファイルをHTMLに変換
+    source-highlight -f html --line-number-ref -i ${TEXI} -o ${WORK_DIR}/${FNAME}.html
 
-	TRANS=$(mktemp)
-	msgattrib --translated --force-po -o ${TRANS} ${NEW_PO}
-	
-	FUZZY=$(mktemp)
-	msgattrib --only-fuzzy --clear-fuzzy --force-po ${NEW_PO} \
-	    | msgfilter --keep-header --force-po -o ${FUZZY} sed -e 's/.*//'
-	msgmerge --force-po --compendium ${COMPENDIUM} \
-		 -o ${FUZZY}.translated /dev/null ${FUZZY}
-	
-	UNTRANS=$(mktemp)
-	msgattrib --untranslated --force-po -o ${UNTRANS} ${NEW_PO}
-	msgmerge --force-po --compendium ${COMPENDIUM} \
-		 -o ${UNTRANS}.translated /dev/null ${UNTRANS}
-	
-	msgcat --force-po --no-wrap -F -o ${NEW_PO} \
-	       ${TRANS} ${FUZZY}.translated ${UNTRANS}.translated
-	
-	rm ${TRANS} ${FUZZY}* ${UNTRANS}*
-	cp ${NEW_PO} ${PO} && rm ${NEW_PO}
-    done
-}
+    # ドキュメントファイルのPOTファイル作成
+    po4a-gettextize -M utf8 \
+		    -f texinfo \
+		    -m ${TEXI} \
+		    -p ${TEXI}.pot
+    
+    # 翻訳済みカレントPOと未訳POTを突合して更新版PO作成
+    msgmerge --previous \
+	     --compendium ${CURR_PO_FILES_DIR}/${FNAME}.po \
+	     -o ${TEXI}.po /dev/null ${TEXI}.pot
+
+    # 更新版POからFUZZYと未訳を抽出
+    FUZZY=$(mktemp)
+    msgattrib -o ${FUZZY} --only-fuzzy ${TEXI}.po
+	    
+    UNTRANS=$(mktemp)
+    msgattrib -o ${UNTRANS} --untranslated ${TEXI}.po
+
+    msgcat -o ${WORK_DIR}/${FNAME}.compendium ${FUZZY} ${UNTRANS}
+    rm -f ${FUZZY} ${UNTRANS}
+    
+done
+
+# 全ドキュメントの未訳FUZZYを結合
+# PO headerは読み飛ばす
+msgcat --width=80 \
+       --sort-by-file \
+       ${WORK_DIR}/*.compendium |
+    perl -ne 'BEGIN{$/="\n\n"}{print if $.>1}' \
+	 > ${WORK_DIR}/compendium.po
+
+# HTMLに変換
+source-highlight \
+    -f html \
+    -H ${WORK_DIR}/header.txt \
+    -i ${WORK_DIR}/compendium.po \
+    -o ${WORK_DIR}/compendium.po.html
+
+# リンクタグ設定
+perl -pe \
+     "s{${WORK_DIR}/${DOCUMENT_FILES_SUBDIR}/([^:]+):(\d+)}{<a href=\1.html#line\2>\1:\2</a>}" \
+     -i ${WORK_DIR}/compendium.po.html
+
+# ウェブサイトにパブリッシュ
+S="${PUBLISH_TO_DIR}/emacs/${CURR_VERSION}/diff_from_${NEW_VERSION_BRANCH}"
+rm -fr $S
+mkdir $S
+cp ${WORK_DIR}/*.html $S
+cd ${PUBLISH_TO_DIR}
+git add -A
+git commit -m "diff-ing at $(date)"
+git push -u origin master
+
