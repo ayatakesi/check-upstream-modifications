@@ -1,6 +1,6 @@
 #!/bin/sh
 # 内部SD逼迫のため外部SDにリポジトリ作成
-LOCAL_REPOSITORY_DIR="/data/data/com.termux/files/home/storage/shared/gitroot/emacs"
+LOCAL_REPOSITORY_DIR="/data/data/com.termux/files/home/storage/external-1/gitroot/emacs"
 DOCUMENT_FILES_SUBDIR="doc/emacs"
 DOCUMENT_FILES="*.texi"
 
@@ -19,7 +19,8 @@ rm -fr ${WORK_DIR} && mkdir -p ${WORK_DIR}
 
 # 対象ブランチをフェッチ
 cd ${LOCAL_REPOSITORY_DIR}
-git fetch origin ${NEW_VERSION_BRANCH}
+git checkout ${NEW_VERSION_BRANCH}
+git pull
 
 # ヘッダーを作成
 cat <<EOF > ${WORK_DIR}/header.txt
