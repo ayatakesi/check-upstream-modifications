@@ -69,14 +69,14 @@ done
 msgcat --width=80 \
        --sort-by-file \
        ${WORK_DIR}/*.compendium |
-    perl -ne 'BEGIN{$/="\n\n"}{print if $.>1}' \
-	 > ${WORK_DIR}/compendium.po
+    perl -ne 'BEGIN{$/="\n\n"}{print ($.>1 ? STDOUT : STDERR);}' \
+	 > ${WORK_DIR}/compendium.pot 2>${WORK_DIR}/header.po
 
 # HTMLに変換
 source-highlight \
     -f html \
     -H ${WORK_DIR}/header.txt \
-    -i ${WORK_DIR}/compendium.po \
+    -i ${WORK_DIR}/compendium.pot \
     -o ${WORK_DIR}/compendium.po.html
 
 # リンクタグ設定
