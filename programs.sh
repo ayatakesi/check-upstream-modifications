@@ -69,7 +69,7 @@ done
 msgcat --width=80 \
        --sort-by-file \
        ${WORK_DIR}/*.compendium |
-    perl -ne 'BEGIN{$/="\n\n"}{print ($.>1 ? STDOUT : STDERR);}' \
+    perl -ne 'BEGIN{$/="\n\n"}{if ($.>1) {print STDOUT} else {print STDERR};}' \
 	 > ${WORK_DIR}/compendium.pot 2>${WORK_DIR}/header.po
 
 # HTMLに変換
