@@ -7,8 +7,11 @@ DOCUMENT_FILES="*.texi"
 # カレントバージョン
 CURR_VERSION=${1}
 
-# 突合先ブランチ
+# 結合先ブランチ
 NEW_VERSION_BRANCH=${2}
+
+# 更新済compendium
+TRANSLATED_COMPENDIUM=${3}
 
 # 当リポジトリと兄弟のローカルリポジトリを参照
 CURR_PO_FILES_DIR="$(pwd)/../emacs-${CURR_VERSION}-doc-emacs"
@@ -42,26 +45,36 @@ do
     source-highlight -f html --line-number-ref -i ${TEXI} -o ${WORK_DIR}/${FNAME}.html
 
     # ドキュメントファイルのPOTファイル作成
+    rm -f ${TEXI}.pot
     po4a-gettextize -M utf8 \
 		    -f texinfo \
 		    -m ${TEXI} \
 		    -p ${TEXI}.pot
-    
-    # 翻訳済みカレントPOと未訳POTを突合して更新版PO作成
-    msgmerge --previous \
-	     --compendium ${CURR_PO_FILES_DIR}/${FNAME}.po \
-	     -o ${TEXI}.po /dev/null ${TEXI}.pot
 
-    # 更新版POからFUZZYと未訳を抽出
-    FUZZY=$(mktemp)
-    msgattrib -o ${FUZZY} --only-fuzzy ${TEXI}.po
-	    
-    UNTRANS=$(mktemp)
-    msgattrib -o ${UNTRANS} --untranslated ${TEXI}.po
+    if [ -e ${CURR_PO_FILES_DIR}/${FNAME}.po ]; then
+	if [ -n "${TRANSLATED_COMPENDIUM}" ]; then
+	    msgcat ${CURR_PO_FILES_DIR}/${FNAME}.po ${TRANSLATED_COMPENDIUM} > new_translation.po
+	else
+	    cp ${CURR_PO_FILES_DIR}/${FNAME}.po new_translation.po
+	fi
+	
+	# 翻訳済みカレントPOと未訳POTを結合して更新版PO作成
+	msgmerge --previous \
+		 --no-wrap \
+		 --compendium new_translation.po \
+		 -o ${TEXI}.po /dev/null ${TEXI}.pot
 
-    msgcat -o ${WORK_DIR}/${FNAME}.compendium ${FUZZY} ${UNTRANS}
-    rm -f ${FUZZY} ${UNTRANS}
-    
+	# 更新版POからFUZZYと未訳を抽出
+	FUZZY=$(mktemp)
+	msgattrib -o ${FUZZY} --only-fuzzy ${TEXI}.po
+	
+	UNTRANS=$(mktemp)
+	msgattrib -o ${UNTRANS} --untranslated ${TEXI}.po
+
+	msgcat -o ${WORK_DIR}/${FNAME}.compendium ${FUZZY} ${UNTRANS}
+	rm -f ${FUZZY} ${UNTRANS}
+    fi
+
 done
 
 # 全ドキュメントの未訳FUZZYを結合
