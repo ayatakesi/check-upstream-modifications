@@ -27,8 +27,10 @@ git pull
 
 # ヘッダーを作成
 cat <<EOF > ${WORK_DIR}/header.txt
-This file was updated $(date)
-  by branch ${NEW_VERSION_BRANCH}'s HEAD.
+This file was updated $(date)<br>
+  by branch ${NEW_VERSION_BRANCH}'s HEAD.<br>
+<br>
+Here is a msgfmt's output (with -v option). <br>
 EOF
 
 # 対象ブランチHEADのドキュメントを作業ディレクトリーにコピー
@@ -42,6 +44,9 @@ do
     FNAME=$(basename ${TEXI})
     
     # ドキュメントファイルをHTMLに変換
+    # @todo texiにアンカー埋め込み
+    # @body compendiumからhtmlの未訳(だった)箇所に飛ぶためにtexiに@anchor仕込む
+    # @body 要texinfo @anchor調査
     source-highlight -f html --line-number-ref -i ${TEXI} -o ${WORK_DIR}/${FNAME}.html
 
     # ドキュメントファイルのPOTファイル作成
@@ -85,12 +90,19 @@ msgcat --width=80 \
     perl -ne 'BEGIN{$/="\n\n"}{if ($.>1) {print STDOUT} else {print STDERR};}' \
 	 > ${WORK_DIR}/compendium.pot 2>${WORK_DIR}/header.po
 
+msgfmt -v ${WORK_DIR}/compendium.pot >>${WORK_DIR}/header.txt 2>&1
+
+# @todo fuzzyのwdiff提供
+# @body fuzzyのmsgid/previous-msgidのwdiffをとりリンクさせる
+# @body 要wdiffhtml調査、elispまたはpython(gettext)お勉強
+
 # HTMLに変換
 source-highlight \
     -f html \
     -H ${WORK_DIR}/header.txt \
     -i ${WORK_DIR}/compendium.pot \
     -o ${WORK_DIR}/compendium.po.html
+
 
 # リンクタグ設定
 perl -pe \
