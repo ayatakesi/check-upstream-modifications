@@ -24,6 +24,7 @@ rm -fr ${WORK_DIR} && mkdir -p ${WORK_DIR}
 cd ${LOCAL_REPOSITORY_DIR}
 git checkout ${NEW_VERSION_BRANCH}
 git pull
+cd -
 
 # ヘッダーを作成
 cat <<EOF > ${WORK_DIR}/header.txt
@@ -43,12 +44,6 @@ for TEXI in $(ls ${WORK_DIR}/${DOCUMENT_FILES_SUBDIR}/${DOCUMENT_FILES})
 do
     FNAME=$(basename ${TEXI})
     
-    # ドキュメントファイルをHTMLに変換
-    # @todo texiにアンカー埋め込み
-    # @body compendiumからhtmlの未訳(だった)箇所に飛ぶためにtexiに@anchor仕込む
-    # @body 要texinfo @anchor調査
-    source-highlight -f html --line-number-ref -i ${TEXI} -o ${WORK_DIR}/${FNAME}.html
-
     # ドキュメントファイルのPOTファイル作成
     rm -f ${TEXI}.pot
     po4a-gettextize -M utf8 \
@@ -58,15 +53,16 @@ do
 
     if [ -e ${CURR_PO_FILES_DIR}/${FNAME}.po ]; then
 	if [ -n "${TRANSLATED_COMPENDIUM}" ]; then
-	    msgcat ${CURR_PO_FILES_DIR}/${FNAME}.po ${TRANSLATED_COMPENDIUM} > new_translation.po
+	    msgcat ${CURR_PO_FILES_DIR}/${FNAME}.po \
+		   ${TRANSLATED_COMPENDIUM} > translated.po
 	else
-	    cp ${CURR_PO_FILES_DIR}/${FNAME}.po new_translation.po
+	    cp ${CURR_PO_FILES_DIR}/${FNAME}.po translated.po
 	fi
 	
 	# 翻訳済みカレントPOと未訳POTを結合して更新版PO作成
 	msgmerge --previous \
 		 --no-wrap \
-		 --compendium new_translation.po \
+		 --compendium translated.po \
 		 -o ${TEXI}.po /dev/null ${TEXI}.pot
 
 	# 更新版POからFUZZYと未訳を抽出
@@ -79,36 +75,53 @@ do
 	msgcat -o ${WORK_DIR}/${FNAME}.compendium ${FUZZY} ${UNTRANS}
 	rm -f ${FUZZY} ${UNTRANS}
     fi
-
+    source-highlight -f html --line-number-ref -i ${TEXI} -o ${WORK_DIR}/${FNAME}.html
 done
 
 # 全ドキュメントの未訳FUZZYを結合
+msgcat --width=80 \
+       --sort-by-file \
+       ${WORK_DIR}/*.compendium \
+       > ${WORK_DIR}/compendium.pot
+
+# 統計情報取得
+msgfmt -v ${WORK_DIR}/compendium.pot >>${WORK_DIR}/header.txt 2>&1
+
+# poにリンク種をセット
+emacs -q --batch \
+      --eval '(setq my-po-file "work/compendium.pot")' \
+      --load $(pwd)/create_anchor.el
+
 # PO headerは読み飛ばす
 msgcat --width=80 \
        --sort-by-file \
-       ${WORK_DIR}/*.compendium |
+       ${WORK_DIR}/compendium.pot |
     perl -ne 'BEGIN{$/="\n\n"}{if ($.>1) {print STDOUT} else {print STDERR};}' \
-	 > ${WORK_DIR}/compendium.pot 2>${WORK_DIR}/header.po
-
-msgfmt -v ${WORK_DIR}/compendium.pot >>${WORK_DIR}/header.txt 2>&1
-
-# @todo fuzzyのwdiff提供
-# @body fuzzyのmsgid/previous-msgidのwdiffをとりリンクさせる
-# @body 要wdiffhtml調査、elispまたはpython(gettext)お勉強
+	 > ${WORK_DIR}/compendium.po 2>${WORK_DIR}/header.po
 
 # HTMLに変換
 source-highlight \
     -f html \
     -H ${WORK_DIR}/header.txt \
-    -i ${WORK_DIR}/compendium.pot \
+    -i ${WORK_DIR}/compendium.po \
     -o ${WORK_DIR}/compendium.po.html
 
+# 種からリンクを設定
+perl -pe '
+     my $line = $_;
+     if ($line =~ m{^(.+)# ([^.]+).([^:]+):(\d+)(.+)$}) {
+     	 my $linkstr = $1 . "# <a href=" . $2 . "." . $3 . "_" . $4 . ".html>変更内容</a>です。";
+	 $linkstr = $linkstr . $5 . "\n";
+	 s/$line/$linkstr/;
+      }' \
+     -i ${WORK_DIR}/compendium.po.html
 
-# リンクタグ設定
+
+# texiソースへのリンク設定
 perl -pe \
      "s{${WORK_DIR}/${DOCUMENT_FILES_SUBDIR}/([^:]+):(\d+)}{<a href=\1.html#line\2>\1:\2</a>}" \
      -i ${WORK_DIR}/compendium.po.html
-
+ 
 # ウェブサイトにパブリッシュ
 S="${PUBLISH_TO_DIR}/emacs/${CURR_VERSION}/diff_from_${NEW_VERSION_BRANCH}"
 rm -fr $S
