@@ -128,6 +128,7 @@ rm -fr $S
 mkdir $S
 cp ${WORK_DIR}/*.html $S
 cd ${PUBLISH_TO_DIR}
+git pull
 git add -A
 git commit -m "diff-ing at $(date)"
 git push -u origin master
